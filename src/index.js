@@ -1,34 +1,275 @@
 import createBareServer from "@tomphttp/bare-server-node";
 import express from "express";
+import HttpsProxyAgent from 'https-proxy-agent';
 import { createServer } from "node:http";
 import { publicPath } from "ultraviolet-static";
-import { uvPath } from "@titaniumnetwork-dev/ultraviolet";
-import { join } from "node:path";
 import { hostname } from "node:os";
+import grpc from "@grpc/grpc-js";
+import protoLoader from "@grpc/proto-loader";
+import NodeCache from "node-cache";
+import bodyParser from "body-parser";
 
-const bare = createBareServer("/bare/");
+var PROTO_PATH = '../Gaia/idl/eris.proto';
+//var PROTO_PATH = '/Users/kevin/github/Gaia/idl/eris.proto';
+var packageDefinition = protoLoader.loadSync(
+PROTO_PATH,
+{keepCase: true,
+	longs: String,
+	enums: String,
+	defaults: true,
+	oneofs: true
+});
+var eris = grpc.loadPackageDefinition(packageDefinition).gaia;
+
+const userCache = new NodeCache( { stdTTL: 120000, checkperiod: 600 } );
+
+const httpProxyAgent = new HttpsProxyAgent('http://216.98.233.166:6746');
+
+const bare = createBareServer("/bare/", {
+	httpAgent: httpProxyAgent,
+	httpsAgent: httpProxyAgent,
+});
 const app = express();
 
+app.use(express.json({limit: '50mb'}));
+//app.use(bodyParser.json({limit: '50mb'}));
+
+function addslashes( str ) {
+	return (str + '').replace(/\\/g, '\\\\');
+}
+
+app.post('/hello/get', (req, res) => {
+	/*
+	var uuid = "3ec20dd0-35ca-412d-b47e-082bf41d5af4";
+
+	var client = new eris.ERIS('localhost:44204', grpc.credentials.createInsecure());
+
+	function updateStreamingAccountCallback(error, streamingAccount) {
+		if (error) {
+			console.log("error update streaming account");
+		} else {
+			console.log("success");
+			res.send("{}");
+		}
+	}
+
+	function readStreamingAccountCallback(error, streamingAccount) {
+		if (error) {
+			console.log("error reading streaming account");
+		} else {
+			
+			streamingAccount.streamingAccount.cookie.cookie = JSON.stringify(req.body);
+
+			var updateStreamingAccountRequest = {
+				streamingAccount: streamingAccount.streamingAccount
+			};
+			client.UpdateStreamingAccount(updateStreamingAccountRequest,
+				updateStreamingAccountCallback);
+		}
+	}
+	var readStreamingAccountRequest = {
+		streamingAccountID: {
+			uuid: {
+				value: uuid
+			}
+		}
+	};
+	client.ReadStreamingAccount(readStreamingAccountRequest,
+		readStreamingAccountCallback);
+	*/
+
+	//console.log("infawdadao: ", getXForwardedFor(req), getAlienSessionCookie(req));
+
+	var value = userCache.get(getXForwardedFor(req));
+	//var value = userCache.get(getAlienSessionCookie(req));
+
+	if (value != undefined && value.session.cookie != undefined) {
+		if (value.session.cookie.cookieType == "COOKIETYPE_LOCALSTORAGE") {
+			res.send(value.session.cookie.cookie);
+			return;
+		}
+	}
+
+	res.send("{}");
+	
+});
+
 // Load our publicPath first and prioritize it over UV.
-app.use(express.static(publicPath));
-// Load vendor files last.
-// The vendor's uv.config.js won't conflict with our uv.config.js inside the publicPath directory.
-app.use("/uv/", express.static(uvPath));
+app.use("/hello/", express.static(publicPath));
 
 // Error for everything else
 app.use((req, res) => {
-  res.status(404);
-  res.sendFile(join(publicPath, "404.html"));
+	res.redirect('/');
 });
 
 const server = createServer();
 
+function printCookie(req) {
+	if ('x-bare-headers' in req.headers) {
+		var bareHeaders = JSON.parse(req.headers['x-bare-headers']);
+		if ('cookie' in bareHeaders) {
+			console.log(bareHeaders['cookie']);
+		}
+	}
+}
+
+function injectCookie(req, cookie) {
+	if ('x-bare-headers' in req.headers) {
+		var bareHeaders = JSON.parse(req.headers['x-bare-headers']);
+		if ('cookie' in bareHeaders) {
+			bareHeaders['cookie'] = cookie;
+			req.headers['x-bare-headers'] = JSON.stringify(bareHeaders);
+		}
+	}
+}
+
+function isRequestFromHost(req, host) {
+	if ('x-bare-headers' in req.headers) {
+		var bareHeaders = JSON.parse(req.headers['x-bare-headers']);
+		return bareHeaders['Host'].includes(host);
+	}
+}
+
+function getXForwardedFor(req) {
+	if (req == undefined || !req.hasOwnProperty("rawHeaders")) {
+		console.log("no headers");
+		return "";
+	}
+
+	var headers = arrayToKeyValue(req.rawHeaders);
+
+	if ('cf-connecting-ip' in headers) {
+		return headers['cf-connecting-ip'];
+	}
+
+	if ('Cf-Connecting-Ip' in headers) {
+		return headers['Cf-Connecting-Ip'];
+	}
+
+	if ('x-forwarded-for' in headers) {
+		return headers['x-forwarded-for'];
+	}
+
+	if ('X-Forwarded-For' in headers) {
+		return headers['X-Forwarded-For'];
+	}
+
+	return "";
+}
+
+function getAlienSessionCookie(req) {
+	if (req == undefined || !req.hasOwnProperty("rawHeaders")) {
+		return "";
+	}
+
+	var headers = arrayToKeyValue(req.rawHeaders);
+
+	var actualCookie = "";
+	if (headers.hasOwnProperty("cookie")) {
+		var cookie = headers.cookie.split("alien_session=");
+		if (cookie.length >= 2) {
+			actualCookie = cookie[1].split(";")[0];
+		}
+	}
+	if (headers.hasOwnProperty("Cookie")) {
+		var cookie = headers.Cookie.split("alien_session=");
+		if (cookie.length >= 2) {
+			actualCookie = cookie[1].split(";")[0];
+		}
+	}
+	return actualCookie;
+}
+
+function arrayToKeyValue(array123) {
+	let updated = [];
+	for (let i = 0; i < array123.length; i += 2) {
+		updated[array123[i]] = array123[i + 1];
+	}
+	return updated;
+}
+
+function getRedirectUrl(req) {
+	var redirectUrl = "https://alienhub.xyz";
+
+	if (req == undefined || !req.hasOwnProperty("rawHeaders")) {
+		return redirectUrl;
+	}
+
+	var headers = arrayToKeyValue(req.rawHeaders);
+
+	if (headers.hasOwnProperty("Host")) {
+		redirectUrl = 'https://' + headers.Host;
+	}
+	return redirectUrl;
+}
+
+function handleRequest(req, res) {
+	if (bare.shouldRoute(req)) {
+		var value = userCache.get(getXForwardedFor(req));
+
+		if (value != undefined && value.session.cookie != undefined) {
+			if (value.session.cookie.cookieType == "COOKIETYPE_INJECTED") {
+				injectCookie(req, value.session.cookie.cookie);
+			}
+		}
+
+		bare.routeRequest(req, res);
+	} else {
+		app(req, res);
+	}
+}
+
 server.on("request", (req, res) => {
-  if (bare.shouldRoute(req)) {
-    bare.routeRequest(req, res);
-  } else {
-    app(req, res);
-  }
+	var value = userCache.get(getXForwardedFor(req));
+	//var value = userCache.get(getAlienSessionCookie(req));
+	var needsRefresh = (req.url == "/hello" || req.url == "/hello/" ||
+		req.url.startsWith("/hello/?url") || 
+		req.url.startsWith("/hello?url")) && req.method == "GET";
+
+	if (value == undefined || needsRefresh) {
+		var actualCookie = getAlienSessionCookie(req);
+		
+		var client = new eris.ERIS('localhost:44204',
+			grpc.credentials.createInsecure());
+
+		function readSessionCallback(error, session) {
+			if (error) {
+				res.writeHead(302, {
+				'Location': getRedirectUrl(req)
+				});
+				res.end();
+			} else {
+				userCache.set(getXForwardedFor(req), session);
+				//userCache.set(getAlienSessionCookie(req), session);
+
+				handleRequest(req, res);
+			}
+		}
+		var readSessionRequest = {
+			sessionID: {
+				uuid: {
+					value: actualCookie
+				}
+			}
+		};
+		client.ReadSession(readSessionRequest, readSessionCallback);
+	} else {
+		handleRequest(req, res);
+	}
+	
+	
+	/*
+	if (bare.shouldRoute(req)) {
+		if (isRequestFromHost(req, "netflix")) {
+			printCookie(req);
+		}
+		
+		bare.routeRequest(req, res);
+	} else {
+		app(req, res);
+	}
+	*/
+	
 });
 
 server.on("upgrade", (req, socket, head) => {
@@ -57,18 +298,6 @@ server.on("listening", () => {
     }:${address.port}`
   );
 });
-
-// https://expressjs.com/en/advanced/healthcheck-graceful-shutdown.html
-process.on("SIGINT", shutdown)
-process.on("SIGTERM", shutdown)
-
-function shutdown() {
-  console.log('SIGTERM signal received: closing HTTP server')
-  server.close(() => {
-    console.log('Server closed.');
-    process.exit(0);
-  });
-}
 
 server.listen({
   port,
