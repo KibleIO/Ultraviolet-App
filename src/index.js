@@ -9,17 +9,18 @@ import protoLoader from "@grpc/proto-loader";
 import NodeCache from "node-cache";
 import bodyParser from "body-parser";
 
-var PROTO_PATH = '../Gaia/idl/eris.proto';
+var PROTO_PATH = '/root/new_stuff/go-monorepo/proto-monorepo/idl/kible.io/gaia/eris.proto';
 //var PROTO_PATH = '/Users/kevin/github/Gaia/idl/eris.proto';
 var packageDefinition = protoLoader.loadSync(
 PROTO_PATH,
 {keepCase: true,
-	longs: String,
-	enums: String,
-	defaults: true,
-	oneofs: true
+        longs: String,
+        enums: String,
+        defaults: true,
+        oneofs: true,
+        includeDirs: ['/root/new_stuff/go-monorepo/proto-monorepo/idl/kible.io/']
 });
-var eris = grpc.loadPackageDefinition(packageDefinition).gaia;
+var eris = grpc.loadPackageDefinition(packageDefinition).kible.gaia;
 
 const userCache = new NodeCache( { stdTTL: 120000, checkperiod: 600 } );
 
@@ -42,7 +43,7 @@ app.post('/hello/get', (req, res) => {
 	/*
 	var uuid = "3ec20dd0-35ca-412d-b47e-082bf41d5af4";
 
-	var client = new eris.ERIS('localhost:44204', grpc.credentials.createInsecure());
+	var client = new eris.ERIS('172.50.0.8:44206', grpc.credentials.createInsecure());
 
 	function updateStreamingAccountCallback(error, streamingAccount) {
 		if (error) {
@@ -229,7 +230,7 @@ server.on("request", (req, res) => {
 	if (value == undefined || needsRefresh) {
 		var actualCookie = getAlienSessionCookie(req);
 		
-		var client = new eris.ERIS('localhost:44204',
+		var client = new eris.ERIS('172.50.0.8:44206',
 			grpc.credentials.createInsecure());
 
 		function readSessionCallback(error, session) {
