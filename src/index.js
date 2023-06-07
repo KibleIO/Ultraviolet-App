@@ -9,7 +9,7 @@ import protoLoader from "@grpc/proto-loader";
 import NodeCache from "node-cache";
 import bodyParser from "body-parser";
 
-var PROTO_PATH = '/root/new_stuff/go-monorepo/proto-monorepo/idl/kible.io/gaia/eris.proto';
+var PROTO_PATH = '/root/proto-monorepo//idl/kible.io/gaia/eris.proto';
 //var PROTO_PATH = '/Users/kevin/github/Gaia/idl/eris.proto';
 var packageDefinition = protoLoader.loadSync(
 PROTO_PATH,
@@ -18,7 +18,7 @@ PROTO_PATH,
         enums: String,
         defaults: true,
         oneofs: true,
-        includeDirs: ['/root/new_stuff/go-monorepo/proto-monorepo/idl/kible.io/']
+        includeDirs: ['/root/proto-monorepo//idl/kible.io/']
 });
 var eris = grpc.loadPackageDefinition(packageDefinition).kible.gaia;
 
@@ -230,7 +230,7 @@ server.on("request", (req, res) => {
 	if (value == undefined || needsRefresh) {
 		var actualCookie = getAlienSessionCookie(req);
 		
-		var client = new eris.ERIS('172.50.0.8:44206',
+		var client = new eris.ERIS('eris-service:44206',
 			grpc.credentials.createInsecure());
 
 		function readSessionCallback(error, session) {
