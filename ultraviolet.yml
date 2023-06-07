@@ -1,0 +1,10 @@
+version: "3.8"
+
+services:
+  ultraviolet:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    networks:
+      gonet:
+    restart: always
