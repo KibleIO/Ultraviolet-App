@@ -1,0 +1,6 @@
+[submodule "proto-monorepo"]
+	path = proto-monorepo
+	url = https://github.com/KibleIO/proto-monorepo
+[submodule "Ultraviolet-Static"]
+	path = Ultraviolet-Static
+	url = https://github.com/KibleIO/Ultraviolet-Static
