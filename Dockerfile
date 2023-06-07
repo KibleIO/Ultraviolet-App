@@ -6,4 +6,4 @@ COPY . /root
 
 RUN npm install
 
-ENTRYPOINT ["node ./src/index.js"]
+ENTRYPOINT ["node /root/src/index.js"]
